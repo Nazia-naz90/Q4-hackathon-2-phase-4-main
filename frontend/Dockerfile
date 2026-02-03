@@ -1,48 +1,85 @@
-# Use official Node runtime as a parent image
-FROM node:21-alpine AS builder
+# frontend/Dockerfile
 
-# Set the working directory in the container
+# Multi-stage build for optimized production image
+# Stage 1: Dependencies installation
+FROM node:20-alpine AS deps
+
+# Install curl for health check
+RUN apk add --no-cache curl
+
+# Working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
-COPY frontend/package.json frontend/package-lock.json ./
+# Copy package files
+COPY package.json ../package-lock.json* ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev dependencies) for the build process
+RUN npm ci
 
-# Copy the rest of the frontend application
-COPY frontend/ ./
+# Stage 2: Build stage
+FROM node:20-alpine AS builder
 
-# Build the Next.js application
+# Install curl for health check
+RUN apk add --no-cache curl
+
+# Working directory
+WORKDIR /app
+
+# Copy package files and installed dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ../package-lock.json* ./
+
+# Copy entire frontend code (excluding files via .dockerignore)
+COPY . .
+
+# Build the application
 RUN npm run build
 
-# Production stage
-FROM node:21-alpine
+# Stage 3: Production stage - Install only production dependencies
+FROM node:20-alpine AS production-deps
 
-# Set the working directory
+# Install curl for health check
+RUN apk add --no-cache curl
+
+# Working directory
 WORKDIR /app
 
-# Copy package.json and installed dependencies from builder stage
-COPY frontend/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+# Copy package files and install only production dependencies
+COPY package.json ../package-lock.json* ./
+RUN npm ci --only=production
 
-# Copy the built application from builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.ts ./
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/tsconfig.json ./
+# Stage 4: Final production stage
+FROM node:20-alpine AS production
 
-# Set environment variables
-ENV NODE_ENV=production
-
-# Expose port 3000 to allow communication to/from the frontend
-EXPOSE 3000
+# Install curl for health check
+RUN apk add --no-cache curl
 
 # Create non-root user for security
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
 
-# Run the application
-CMD ["npm", "start"]
+# Working directory
+WORKDIR /app
+
+# Copy necessary files from previous stages
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=production-deps /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+# Change ownership to non-root user
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Start Next.js app
+CMD ["node", "server.js"]

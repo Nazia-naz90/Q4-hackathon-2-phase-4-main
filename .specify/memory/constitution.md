@@ -23,6 +23,23 @@ MCP tools must implement proper authorization checks. Agent access to backend fu
 ### VII. API-First Development
 Backend API endpoints are designed first with clear contracts. Frontend implementation follows API specifications with proper error handling and loading states.
 
+## Phase 4: Cloud-Native Deployment Principles
+
+### VIII. Cloud-Native Architecture Priority
+We will prioritize a 'Cloud-Native' approach in this phase. Every component (Frontend and Backend) must necessarily be containerized and deployed on Kubernetes (Minikube).
+
+### IX. Infrastructure as Code (IaC) Standard
+Instead of direct kubectl commands, Helm Charts must always be used for deployment. Values.yaml files must be used for configuration management.
+
+### X. Automation & AI-Assisted Operations
+kubectl-ai and kagent will be used for infrastructure changes to ensure the deployment and debugging process remains intelligent and automated.
+
+### XI. Containerization Rules
+Docker images must be built using Gordon (Docker AI Agent). Images must be lightweight and must properly handle environment variables.
+
+### XII. Statelessness & Resilience
+The application must be stateless to fully leverage Kubernetes scaling and self-healing features (pod restarts).
+
 ## Security Requirements
 All authentication flows must use HTTPS in production. JWT tokens have appropriate expiration times. Passwords are never stored in plain text. Input validation prevents injection attacks. Conversational inputs are sanitized and validated before processing.
 
@@ -34,5 +51,5 @@ Feature development follows Spec-Driven Development methodology. All changes mus
 
 This constitution governs all development decisions for the Todo Application. All PRs must verify compliance with these principles. Any architectural changes require updates to this constitution.
 
-**Version**: 2.0.0 | **Ratified**: 2026-01-11 | **Last Amended**: 2026-01-11
+**Version**: 3.0.0 | **Ratified**: 2026-02-03 | **Last Amended**: 2026-02-03
 <!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
