@@ -64,9 +64,10 @@ This Helm chart deploys the Todo Application which consists of:
 | Name                            | Description                           | Value                               |
 | ------------------------------- | ------------------------------------- | ----------------------------------- |
 | `secrets.openaiApiKey`          | OpenAI API key                        | `""`                                |
-| `secrets.postgresUser`          | PostgreSQL username                   | `"postgres"`                        |
-| `secrets.postgresPassword`      | PostgreSQL password                   | `"mysecretpassword"`                |
-| `secrets.postgresDb`            | PostgreSQL database name              | `"todo_db"`                         |
+| `secrets.postgresUser`          | PostgreSQL username                   | `""`                                |
+| `secrets.postgresPassword`      | PostgreSQL password                   | `""`                                |
+| `secrets.postgresDb`            | PostgreSQL database name              | `""`                                |
+| `secrets.secretKey`             | Application secret key                | `""`                                |
 
 ## Installing the Chart
 
@@ -74,8 +75,29 @@ To install the chart with the release name `my-todo-app`:
 
 ```console
 # From the project root directory
-helm install my-todo-app ./helm/todo-app
+# For local development with dummy values (not suitable for production)
+helm install my-todo-app ./helm/todo-app \
+  --set secrets.openaiApiKey="your-openai-key-here" \
+  --set secrets.postgresUser="postgres" \
+  --set secrets.postgresPassword="your-password" \
+  --set secrets.postgresDb="todo_db" \
+  --set secrets.secretKey="your-super-secret-key" \
+  --set database.url="postgresql://postgres:your-password@your-db-host:5432/todo_db"
 ```
+
+For production deployments, it's recommended to use a values file:
+
+```console
+# Create a secrets-values.yaml file with your sensitive data
+helm install my-todo-app ./helm/todo-app -f secrets-values.yaml
+```
+
+## Security Best Practices
+
+1. Never commit actual secrets to version control
+2. Use Kubernetes secrets for sensitive data
+3. For production, consider using external secret management solutions like HashiCorp Vault
+4. Rotate your API keys and passwords regularly
 
 ## Upgrading the Chart
 

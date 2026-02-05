@@ -163,12 +163,12 @@ config:
 
 # Database configuration
 database:
-  url: "postgresql://neondb_owner:npg_DRmg9fK7ZYrk@ep-sweet-frog-a1hrxlm4-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  url: ""
 
 # Secrets configuration
 secrets:
-  openaiApiKey: "replace-with-your-real-key-before-deploying"
-  postgresUser: "postgres"
-  postgresPassword: "mysecretpassword"
-  postgresDb: "todo_db"
-  secretKey: "your-super-secret-and-long-random-string-change-this-in-production"
+  openaiApiKey: ""
+  postgresUser: ""
+  postgresPassword: ""
+  postgresDb: ""
+  secretKey: ""
