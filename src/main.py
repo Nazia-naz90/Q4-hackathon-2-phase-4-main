@@ -1,4 +1,4 @@
-from src.cli import main_loop
+from cli import main_loop
 
 if __name__ == "__main__":
     """

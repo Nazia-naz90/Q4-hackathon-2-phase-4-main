@@ -16,6 +16,7 @@ data:
   # Frontend configuration
   NEXT_PUBLIC_API_HOST: {{ .Values.config.frontendApiHost | quote }}
   NEXT_PUBLIC_API_PORT: {{ .Values.config.frontendApiPort | quote }}
+  NEXT_PUBLIC_APP_URL: "http://todo-frontend:{{ .Values.frontend.service.port }}"
 
   # AI Agent configuration
   AGENT_HOST: {{ .Values.config.agentHost | quote }}

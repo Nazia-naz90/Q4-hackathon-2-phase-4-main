@@ -10,7 +10,8 @@ import sys
 import json
 
 # Add the project root and mcp-server to the Python path
-project_root = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+project_root = os.path.dirname(current_dir)  # project root directory
 mcp_server_path = os.path.join(project_root, 'mcp-server')
 
 sys.path.insert(0, project_root)
@@ -22,7 +23,7 @@ async def test_improved_view_task_list():
 
     # Import the AI agent
     try:
-        from mcp-server.test_agent_chat import TodoChatAgent
+        from test_agent_chat import TodoChatAgent
     except ImportError as e:
         print(f"Error importing TodoChatAgent: {e}")
         print("Make sure you have the correct path and dependencies.")

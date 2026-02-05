@@ -2,10 +2,10 @@
 
 # Multi-stage build for optimized production image
 # Stage 1: Dependencies installation
-FROM node:20-alpine AS deps
+FROM node:20-bookworm AS deps
 
-# Install curl for health check
-RUN apk add --no-cache curl
+# Install curl and python3 for potential build dependencies
+RUN apt-get update && apt-get install -y curl python3 make g++ build-essential
 
 # Working directory
 WORKDIR /app
@@ -17,10 +17,10 @@ COPY package.json ../package-lock.json* ./
 RUN npm ci
 
 # Stage 2: Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm AS builder
 
-# Install curl for health check
-RUN apk add --no-cache curl
+# Install curl and build tools
+RUN apt-get update && apt-get install -y curl python3 make g++ build-essential
 
 # Working directory
 WORKDIR /app
@@ -32,14 +32,14 @@ COPY package.json ../package-lock.json* ./
 # Copy entire frontend code (excluding files via .dockerignore)
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with specific environment to avoid Turbopack issues
+RUN NEXT_PUBLIC_DOCKER_BUILD=1 npm run build
 
 # Stage 3: Production stage - Install only production dependencies
-FROM node:20-alpine AS production-deps
+FROM node:20-bookworm AS production-deps
 
 # Install curl for health check
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl
 
 # Working directory
 WORKDIR /app
@@ -49,14 +49,14 @@ COPY package.json ../package-lock.json* ./
 RUN npm ci --only=production
 
 # Stage 4: Final production stage
-FROM node:20-alpine AS production
+FROM node:20-bookworm AS production
 
 # Install curl for health check
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs nextjs
 
 # Working directory
 WORKDIR /app

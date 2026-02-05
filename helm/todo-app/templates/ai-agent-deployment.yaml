@@ -80,13 +80,13 @@ spec:
                   key: BACKEND_URL_INTERNAL
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5

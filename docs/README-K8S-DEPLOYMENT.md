@@ -122,10 +122,10 @@ Using the provided deployment script:
 
 ```bash
 # On Linux/macOS
-./deploy-with-helm.sh
+./scripts/deploy-with-helm.sh
 
 # On Windows
-.\deploy-with-helm.bat
+.\scripts\deploy-with-helm.bat
 ```
 
 Or deploy manually:

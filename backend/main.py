@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from contextlib import asynccontextmanager
 from typing import List
 from sqlmodel import Session, select, func
@@ -16,9 +16,26 @@ from pydantic import ValidationError
 from fastapi.middleware.cors import CORSMiddleware
 import sys
 import importlib.util
+import logging
+from fastapi.responses import ORJSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import asyncio
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+logger.info("Rate limiter initialized")
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -37,25 +54,73 @@ security = HTTPBearer()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run database setup on startup
+    logger.info("Starting up TaskFlow API...")
     create_db_and_tables()
+    logger.info("Database tables created/verified")
     yield
     # Any cleanup code can go here if needed
+    logger.info("Shutting down TaskFlow API...")
 
 
-app = FastAPI(lifespan=lifespan, title="TaskFlow API", version="1.0.0")
+# Initialize FastAPI app with custom exception handlers and JSON encoder
+app = FastAPI(
+    lifespan=lifespan,
+    title="TaskFlow API",
+    version="1.0.0",
+    default_response_class=ORJSONResponse  # Use orjson for faster JSON serialization
+)
 
-# Add CORS middleware
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add CORS middleware with more secure configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "https://localhost:3000",
+        "https://127.0.0.1:3000",
+        # Add your production domain here when deploying
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    max_age=3600  # Cache preflight requests for 1 hour
 )
+
+# Add custom exception handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    logger.warning(f"Validation error: {exc}")
+    return ORJSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()}
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    logger.info(f"HTTP error: {exc.status_code} - {exc.detail}")
+    return ORJSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return ORJSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 
 @app.get("/")
-def read_root():
+@limiter.limit("100/minute")
+def read_root(request: Request):
     return {"message": "TaskFlow API is running!"}
 
 
@@ -101,6 +166,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    if not credentials or not credentials.credentials:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -193,7 +262,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = D
 
 # Simplified endpoints that extract user_id from JWT token
 @app.post("/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+@limiter.limit("20/minute")
+def create_task(
+    request: Request,
+    task: TaskCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
     """
     Create a new task for the authenticated user
     """
@@ -203,32 +278,61 @@ def create_task(task: TaskCreate, current_user: User = Depends(get_current_user)
         task_title_lower = task.title.lower().strip()
 
         if any(term in task_title_lower for term in inappropriate_terms):
+            logger.warning(f"Inappropriate content detected in task title for user {current_user.id}")
             raise HTTPException(status_code=400, detail="Task title contains inappropriate content")
+
+        # Additional validation
+        if len(task.title.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Task title cannot be empty")
+
+        if len(task.title) > 200:
+            raise HTTPException(status_code=400, detail="Task title is too long (max 200 characters)")
+
+        if task.description and len(task.description) > 1000:
+            raise HTTPException(status_code=400, detail="Task description is too long (max 1000 characters)")
 
         db_task = Task(user_id=current_user.id, **task.model_dump())
         session.add(db_task)
         session.commit()
         session.refresh(db_task)
+        logger.info(f"Task created successfully: {db_task.id} for user {current_user.id}")
         return db_task
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
+        logger.error(f"Error creating task for user {current_user.id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An error occurred while creating the task: {str(e)}")
 
 
+from fastapi import Request  # Add this import for the rate limiter
+
 @app.get("/tasks", response_model=List[TaskRead])
-def read_tasks(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+@limiter.limit("60/minute")
+def read_tasks(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Maximum number of records to return")
+):
     """
-    Get all tasks for the authenticated user
+    Get all tasks for the authenticated user with pagination
     """
     try:
         from sqlmodel import select
-        tasks = session.exec(select(Task).where(Task.user_id == current_user.id)).all()
+        statement = (
+            select(Task)
+            .where(Task.user_id == current_user.id)
+            .offset(skip)
+            .limit(min(limit, 100))  # Cap the limit to prevent abuse
+        )
+        tasks = session.exec(statement).all()
         return tasks
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error retrieving tasks for user {current_user.id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An error occurred while retrieving tasks: {str(e)}")
 
 
@@ -249,14 +353,35 @@ def read_task(task_id: str, current_user: User = Depends(get_current_user), sess
 
 
 @app.put("/tasks/{task_id}", response_model=TaskRead)
-def update_task(task_id: str, task_update: TaskUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+@limiter.limit("30/minute")
+def update_task(
+    request: Request,
+    task_id: str,
+    task_update: TaskUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
     """
     Update a specific task by ID for the authenticated user
     """
     try:
         task = session.get(Task, task_id)
         if not task or task.user_id != current_user.id:
+            logger.warning(f"Attempt to update non-existent or unauthorized task {task_id} by user {current_user.id}")
             raise HTTPException(status_code=404, detail="Task not found")
+
+        # Validate update data
+        if task_update.title and len(task_update.title.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Task title cannot be empty")
+
+        if task_update.title and len(task_update.title) > 200:
+            raise HTTPException(status_code=400, detail="Task title is too long (max 200 characters)")
+
+        if task_update.description and len(task_update.description) > 1000:
+            raise HTTPException(status_code=400, detail="Task description is too long (max 1000 characters)")
+
+        # Store original values for logging
+        original_status = task.status
 
         # Update task fields
         for field, value in task_update.model_dump(exclude_unset=True).items():
@@ -272,92 +397,156 @@ def update_task(task_id: str, task_update: TaskUpdate, current_user: User = Depe
         session.add(task)
         session.commit()
         session.refresh(task)
+
+        logger.info(f"Task updated successfully: {task.id} for user {current_user.id}. "
+                   f"Status changed from {original_status} to {task.status}")
         return task
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
+        logger.error(f"Error updating task {task_id} for user {current_user.id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An error occurred while updating the task: {str(e)}")
 
 
+@app.patch("/tasks/{task_id}/toggle", response_model=TaskRead)
+@limiter.limit("30/minute")
+def toggle_task_status(
+    request: Request,
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Toggle the status of a specific task between pending and completed
+    """
+    try:
+        task = session.get(Task, task_id)
+        if not task or task.user_id != current_user.id:
+            logger.warning(f"Attempt to toggle non-existent or unauthorized task {task_id} by user {current_user.id}")
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Toggle the status
+        if task.status == "completed":
+            task.status = "pending"
+            task.completed_at = None  # Clear completion timestamp when changing to pending
+        else:
+            task.status = "completed"
+            task.completed_at = datetime.utcnow()  # Set completion timestamp when changing to completed
+
+        session.add(task)
+        session.commit()
+        session.refresh(task)
+
+        logger.info(f"Task status toggled successfully: {task.id} for user {current_user.id}. "
+                   f"New status: {task.status}")
+        return task
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error toggling task {task_id} status for user {current_user.id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An error occurred while toggling task status: {str(e)}")
+
+
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+@limiter.limit("15/minute")
+def delete_task(
+    request: Request,
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
     """
     Delete a specific task by ID for the authenticated user
     """
     try:
         task = session.get(Task, task_id)
         if not task or task.user_id != current_user.id:
+            logger.warning(f"Attempt to delete non-existent or unauthorized task {task_id} by user {current_user.id}")
             raise HTTPException(status_code=404, detail="Task not found")
 
         session.delete(task)
         session.commit()
+        logger.info(f"Task deleted successfully: {task_id} for user {current_user.id}")
         return
     except HTTPException:
         raise
     except Exception as e:
         session.rollback()
+        logger.error(f"Error deleting task {task_id} for user {current_user.id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An error occurred while deleting the task: {str(e)}")
 
 
 # Admin stats endpoint
 @app.get("/api/admin/stats")
-def get_admin_stats(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+@limiter.limit("10/minute")
+def get_admin_stats(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
     """
     Get admin statistics - only accessible if current_user.is_admin == True
     """
     if not current_user.is_admin:
+        logger.warning(f"Unauthorized admin stats access attempt by user {current_user.id}")
         raise HTTPException(status_code=403, detail="Only admin users can access this endpoint")
 
-    from sqlmodel import select
-    from datetime import datetime, timedelta
+    try:
+        from sqlmodel import select
+        from datetime import datetime, timedelta
 
-    # Total Users count
-    total_users = session.exec(select(func.count(User.id))).one()
+        # Total Users count
+        total_users = session.exec(select(func.count(User.id))).one()
 
-    # Total Tasks count
-    total_tasks = session.exec(select(func.count(Task.id))).one()
+        # Total Tasks count
+        total_tasks = session.exec(select(func.count(Task.id))).one()
 
-    # Tasks distribution by Priority (Low, Medium, High)
-    priority_counts = {}
-    for priority in ["low", "medium", "high"]:
-        count = session.exec(select(func.count(Task.id)).where(Task.priority == priority)).one()
-        priority_counts[priority] = count
+        # Tasks distribution by Priority (Low, Medium, High)
+        priority_counts = {}
+        for priority in ["low", "medium", "high"]:
+            count = session.exec(select(func.count(Task.id)).where(Task.priority == priority)).one()
+            priority_counts[priority] = count
 
-    # Tasks distribution by Status (Pending, Completed)
-    status_counts = {}
-    for status in ["pending", "completed"]:
-        count = session.exec(select(func.count(Task.id)).where(Task.status == status)).one()
-        status_counts[status] = count
+        # Tasks distribution by Status (Pending, Completed)
+        status_counts = {}
+        for status_val in ["pending", "completed"]:
+            count = session.exec(select(func.count(Task.id)).where(Task.status == status_val)).one()
+            status_counts[status_val] = count
 
-    # Recent Task activity (tasks created in the last 7 days) for a Line Chart
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    recent_tasks = session.exec(
-        select(Task).where(Task.created_at >= seven_days_ago)
-    ).all()
+        # Recent Task activity (tasks created in the last 7 days) for a Line Chart
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        recent_tasks = session.exec(
+            select(Task).where(Task.created_at >= seven_days_ago)
+        ).all()
 
-    # Group by date for the line chart
-    from collections import defaultdict
-    daily_task_counts = defaultdict(int)
-    for task in recent_tasks:
-        date_str = task.created_at.strftime("%Y-%m-%d")
-        daily_task_counts[date_str] += 1
+        # Group by date for the line chart
+        from collections import defaultdict
+        daily_task_counts = defaultdict(int)
+        for task in recent_tasks:
+            date_str = task.created_at.strftime("%Y-%m-%d")
+            daily_task_counts[date_str] += 1
 
-    # Format for chart (sort by date)
-    recent_task_activity = []
-    for date_str in sorted(daily_task_counts.keys()):
-        recent_task_activity.append({
-            "date": date_str,
-            "count": daily_task_counts[date_str]
-        })
+        # Format for chart (sort by date)
+        recent_task_activity = []
+        for date_str in sorted(daily_task_counts.keys()):
+            recent_task_activity.append({
+                "date": date_str,
+                "count": daily_task_counts[date_str]
+            })
 
-    return {
-        "total_users": total_users,
-        "total_tasks": total_tasks,
-        "tasks_by_priority": priority_counts,
-        "tasks_by_status": status_counts,
-        "recent_task_activity": recent_task_activity
-    }
+        logger.info(f"Admin stats retrieved for admin user {current_user.id}")
+        return {
+            "total_users": total_users,
+            "total_tasks": total_tasks,
+            "tasks_by_priority": priority_counts,
+            "tasks_by_status": status_counts,
+            "recent_task_activity": recent_task_activity
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving admin stats for user {current_user.id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An error occurred while retrieving admin stats: {str(e)}")
 
 
 # Chatbot endpoint

@@ -11,7 +11,11 @@ import os
 def inspect_source_code():
     print("Inspecting source code in mcp-server/test_agent_chat.py...")
 
-    with open('mcp-server/test_agent_chat.py', 'r') as f:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # src directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'test_agent_chat.py')
+    with open(file_path, 'r') as f:
         content = f.read()
 
     tree = ast.parse(content)
@@ -110,7 +114,11 @@ def inspect_source_code():
 
     # Also inspect the mcp-server/main.py file
     print("\nInspecting mcp-server/main.py...")
-    with open('mcp-server/main.py', 'r') as f:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # src directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'main.py')
+    with open(file_path, 'r') as f:
         content = f.read()
 
     tree = ast.parse(content)

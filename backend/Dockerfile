@@ -14,15 +14,19 @@ RUN apt-get update \
         postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the backend requirements first to leverage Docker layer caching
-COPY backend/requirements.txt /app/requirements.txt
+# Copy the requirements first to leverage Docker layer caching
+COPY requirements.txt /app/requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the backend application
-COPY backend/ /app/
+# Copy only the necessary application files
+COPY main.py /app/
+COPY models.py /app/
+COPY database.py /app/
+COPY admin_utils.py /app/
+COPY .env /app/  # if it exists
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' appuser && \

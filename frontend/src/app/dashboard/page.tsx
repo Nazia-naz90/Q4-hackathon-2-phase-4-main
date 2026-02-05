@@ -68,7 +68,7 @@ export default function DashboardPage() {
 
   const fetchTodos = async () => {
     try {
-      const data = await todoAPI.getAll();
+      const data = await todoAPI.getAll({ skip: 0, limit: 100 });
       setTodos(data);
     } catch (error) {
       console.error('Error fetching todos:', error);

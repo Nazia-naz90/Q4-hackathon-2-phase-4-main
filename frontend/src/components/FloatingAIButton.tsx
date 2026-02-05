@@ -98,10 +98,35 @@ const TodoChatbot = ({
   // Function to extract task identification for deletion
   const extractTaskForDeletion = (message: string): { title?: string; taskId?: string } | null => {
     // Look for deletion keywords and task identifiers
-    const deleteKeywords = ['delete', 'remove', 'cancel', 'complete', 'done'];
+    // Exclude "complete" and "done" when they appear in update contexts to avoid confusion
+    const deleteKeywords = ['delete', 'remove', 'cancel', 'finish']; // Removed 'complete' and 'done' to avoid confusion with update requests
     const hasDeleteKeyword = deleteKeywords.some(keyword =>
       message.toLowerCase().includes(keyword)
     );
+
+    // Check if this might be an update request instead (contains "update" or similar)
+    const updateKeywords = ['update', 'change', 'modify', 'edit', 'adjust', 'set', 'make', 'mark', 'turn', 'switch'];
+    const hasUpdateKeyword = updateKeywords.some(keyword =>
+      message.toLowerCase().includes(keyword)
+    );
+
+    // If it has update keywords, don't treat it as a deletion request
+    if (hasUpdateKeyword) {
+      return null;
+    }
+
+    // Also check if it contains update-like patterns
+    const updatePatterns = [
+      /(?:update|change|modify|edit|adjust|set|make|mark|turn|switch)\s+.+\s+(?:to|as|into|is|:)/i,
+      /(?:completed|done|finished|pending|active)$/i,
+      /(?:high|medium|low)\s+priority/i,
+      /(?:priority|status)\s+(?:high|medium|low|completed|done|pending)/i
+    ];
+
+    const hasUpdatePattern = updatePatterns.some(pattern => pattern.test(message));
+    if (hasUpdatePattern) {
+      return null;
+    }
 
     if (!hasDeleteKeyword) {
       return null;
@@ -109,13 +134,19 @@ const TodoChatbot = ({
 
     // Look for the most likely task title patterns
     // Try to extract the full task title after "delete" or "remove"
-    const fullTitleMatch = message.match(/(?:delete|remove|cancel)\s+(?:the\s+)?(.+?)(?:\.|$|,|and|please|now|from|my)/i);
+    const fullTitleMatch = message.match(/(?:delete|remove|cancel)\s+(?:the\s+)?(.+?)(?:\.|$|,|and|please|now|from|my|:)/i);
     if (fullTitleMatch) {
       return { title: fullTitleMatch[1].trim() };
     }
 
+    // Handle colon-separated format like "delete Mujtaba Task01: completed"
+    const colonFormatMatch = message.match(/(?:delete|remove|cancel)\s+(.+?):\s*(.+)/i);
+    if (colonFormatMatch) {
+      return { title: colonFormatMatch[1].trim() };
+    }
+
     // Extract task by title with more variations
-    const titleMatch = message.match(/(?:task|called|named|titled|the)\s+(.*?)(?:\.|$|,|and|from|my)/i);
+    const titleMatch = message.match(/(?:task|called|named|titled|the)\s+(.*?)(?:\.|$|,|and|from|my|:)/i);
     if (titleMatch) {
       return { title: titleMatch[1].trim() };
     }
@@ -152,7 +183,7 @@ const TodoChatbot = ({
   // Function to extract task information for updates
   const extractTaskForUpdate = (message: string): { title?: string; updates: { title?: string; description?: string; priority?: 'low' | 'medium' | 'high'; status?: 'pending' | 'completed' } } | null => {
     // Look for update keywords
-    const updateKeywords = ['update', 'change', 'modify', 'edit', 'adjust', 'set', 'make'];
+    const updateKeywords = ['update', 'change', 'modify', 'edit', 'adjust', 'set', 'make', 'mark', 'turn', 'switch'];
     const hasUpdateKeyword = updateKeywords.some(keyword =>
       message.toLowerCase().includes(keyword)
     );
@@ -168,7 +199,7 @@ const TodoChatbot = ({
     let taskTitle: string | undefined = undefined;
 
     // Pattern 1: "Update [task title] to [value]" or "Change [task title] to [value]"
-    const updatePatternMatch = message.match(/(?:update|change|modify|edit|adjust|set|make)\s+(.+?)\s+(?:to|as|into|is)\s+/i);
+    const updatePatternMatch = message.match(/(?:update|change|modify|edit|adjust|set|make|mark|turn|switch)\s+(.+?)\s+(?:to|as|into|is|:)/i);
     if (updatePatternMatch) {
       taskTitle = updatePatternMatch[1].trim();
       // Remove "task" if it's part of the title (e.g., "Buy milk task")
@@ -177,8 +208,16 @@ const TodoChatbot = ({
 
     // Pattern 2: "[task title] called/named/titled [value]"
     if (!taskTitle) {
-      const titleMatch = message.match(/(?:task|called|named|titled)\s+(.*?)(?:\.|$|,|and|to|so)/i);
+      const titleMatch = message.match(/(?:task|called|named|titled)\s+(.*?)(?:\.|$|,|and|to|so|:)/i);
       taskTitle = titleMatch ? titleMatch[1].trim() : undefined;
+    }
+
+    // Pattern 3: Handle cases like "Update Mujtaba Task01: completed" where title and update value are separated by colon
+    if (!taskTitle) {
+      const colonPatternMatch = message.match(/(?:update|change|modify|edit|adjust|set|make|mark|turn|switch)\s+(.+?):\s*(.+)/i);
+      if (colonPatternMatch) {
+        taskTitle = colonPatternMatch[1].trim();
+      }
     }
 
     // Extract new title
@@ -209,11 +248,28 @@ const TodoChatbot = ({
       updates.description = descMatch[1].trim();
     }
 
-    // Extract status
-    const statusMatch = message.match(/(?:status|to|as)\s+(completed|done|finished|pending|active)/i);
-    if (statusMatch) {
-      const statusText = statusMatch[1].toLowerCase();
-      updates.status = statusText === 'completed' || statusText === 'done' || statusText === 'finished' ? 'completed' : 'pending';
+    // Extract status - enhanced pattern matching
+    // Look for various ways to express completion status
+    const statusPatterns = [
+      /(?:to|as|into|is)\s+(completed|done|finished|pending|active)/i,
+      /(?:status|to|as)\s+(completed|done|finished|pending|active)/i,
+      /(?:completed|done|finished)/i,
+      /(?:pending|active)/i,
+      /(?:\s|^)(completed|done|finished|pending|active)(?:\s|$)/i
+    ];
+
+    for (const pattern of statusPatterns) {
+      const statusMatch = message.match(pattern);
+      if (statusMatch) {
+        const statusText = statusMatch[1].toLowerCase();
+        if (statusText === 'completed' || statusText === 'done' || statusText === 'finished') {
+          updates.status = 'completed';
+          break;
+        } else if (statusText === 'pending' || statusText === 'active') {
+          updates.status = 'pending';
+          break;
+        }
+      }
     }
 
     // If we have updates, return them
@@ -376,7 +432,7 @@ const TodoChatbot = ({
       if (updateInfo) {
         try {
           // Get all tasks to find the one to update
-          const allTasks = await todoAPI.getAll();
+          const allTasks = await todoAPI.getAll({ skip: 0, limit: 100 });
 
           // Find the task to update by title or other criteria
           let taskToUpdate = null;
@@ -390,68 +446,133 @@ const TodoChatbot = ({
               task.title.toLowerCase().trim() === searchTerm
             );
 
-            // If no exact match, try partial match
+            // If no exact match, try partial match with more flexible handling
             if (!taskToUpdate) {
               taskToUpdate = allTasks.find((task: any) =>
-                task.title.toLowerCase().includes(searchTerm)
+                task.title.toLowerCase().includes(searchTerm) ||
+                searchTerm.includes(task.title.toLowerCase())
               );
             }
 
             // If still no match, try matching individual words with a more sophisticated approach
             if (!taskToUpdate) {
-              const searchWords = searchTerm.split(/\s+/);
+              const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
 
-              // Find the task with the highest word match ratio
-              let bestMatch = null;
-              let bestScore = 0;
+              // If search term is very short, be more permissive
+              if (searchWords.length === 1 && searchWords[0].length <= 3) {
+                // For short terms, look for tasks that start with or contain the term
+                taskToUpdate = allTasks.find((task: any) =>
+                  task.title.toLowerCase().startsWith(searchWords[0]) ||
+                  task.title.toLowerCase().includes(searchWords[0])
+                );
+              } else {
+                // Find the task with the highest word match ratio
+                let bestMatch = null;
+                let bestScore = 0;
 
-              for (const task of allTasks) {
-                const taskTitle = task.title.toLowerCase();
+                for (const task of allTasks) {
+                  const taskTitle = task.title.toLowerCase();
+                  const taskWords = taskTitle.split(/\s+/).filter(word => word.length > 0);
 
-                // Count exact word matches
-                const matches = searchWords.filter(word => taskTitle.includes(word));
-                const exactMatches = matches.length;
+                  // Count exact word matches
+                  const matches = searchWords.filter(word => taskTitle.includes(word));
+                  const exactMatches = matches.length;
 
-                // Calculate score based on percentage of matched words
-                const score = exactMatches > 0 ? exactMatches / searchWords.length : 0;
+                  // Count partial matches (substring matches)
+                  let partialMatches = 0;
+                  for (const searchWord of searchWords) {
+                    for (const taskWord of taskWords) {
+                      if (taskWord.includes(searchWord) || searchWord.includes(taskWord)) {
+                        partialMatches++;
+                        break; // Count each search word only once
+                      }
+                    }
+                  }
 
-                // Also consider if the search term is contained in the task title
-                const containsSearch = taskTitle.includes(searchTerm) ? 0.5 : 0;
-                const combinedScore = score + containsSearch;
+                  // Calculate score based on exact matches and partial matches
+                  const exactScore = exactMatches > 0 ? exactMatches / searchWords.length : 0;
+                  const partialScore = partialMatches > 0 ? partialMatches / searchWords.length : 0;
 
-                if (combinedScore > bestScore && combinedScore > 0.3) { // Require at least 30% match
-                  bestScore = combinedScore;
-                  bestMatch = task;
+                  // Weight exact matches higher than partial matches
+                  const combinedScore = (exactScore * 0.7) + (partialScore * 0.3);
+
+                  // Also consider if the search term is contained in the task title or vice versa
+                  const containsMatch = taskTitle.includes(searchTerm) || searchTerm.includes(taskTitle) ? 0.3 : 0;
+                  const finalScore = combinedScore + containsMatch;
+
+                  if (finalScore > bestScore && finalScore > 0.2) { // Require at least 20% match
+                    bestScore = finalScore;
+                    bestMatch = task;
+                  }
+                }
+
+                taskToUpdate = bestMatch;
+              }
+            }
+
+            // If still no match, try a simpler approach for common cases like "Mujtaba Task01"
+            if (!taskToUpdate) {
+              // Look for tasks that contain both words separately
+              const titleWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+              if (titleWords.length >= 2) {
+                for (const task of allTasks) {
+                  const taskTitle = task.title.toLowerCase();
+                  const taskContainsAllWords = titleWords.every(word => taskTitle.includes(word));
+                  if (taskContainsAllWords) {
+                    taskToUpdate = task;
+                    break;
+                  }
                 }
               }
-
-              taskToUpdate = bestMatch;
             }
           }
 
           if (taskToUpdate) {
-            // Update the task
-            const updatedTask = await todoAPI.updateTask(taskToUpdate.id, updateInfo.updates);
+            try {
+              // Update the task
+              const updatedTask = await todoAPI.updateTask(taskToUpdate.id, updateInfo.updates);
 
-            // Notify parent component
-            if (typeof onTaskUpdated === 'function') {
-              onTaskUpdated();
+              // Notify parent component
+              if (typeof onTaskUpdated === 'function') {
+                onTaskUpdated();
+              }
+
+              // Bot confirms task update
+              const botMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                content: `✏️ Successfully updated task: "${taskToUpdate.title}". Changes have been applied to your task.`,
+                sender: 'bot',
+                timestamp: new Date(),
+              };
+
+              setMessages(prev => [...prev, botMessage]);
+            } catch (specificUpdateError: any) {
+              console.error('Error updating specific task:', specificUpdateError);
+
+              let errorMessageContent = 'Sorry, I encountered an error updating your task. Please try again.';
+
+              // Check for specific error types
+              if (specificUpdateError.code === 'ECONNABORTED' || specificUpdateError.message.includes('timeout')) {
+                errorMessageContent = `The request timed out while updating the task "${taskToUpdate.title}". Please try again.`;
+              } else if (specificUpdateError.response?.status === 404) {
+                errorMessageContent = `The task "${taskToUpdate.title}" could not be found. It may have been deleted already.`;
+              } else if (specificUpdateError.response?.status === 403) {
+                errorMessageContent = `You don't have permission to update the task "${taskToUpdate.title}".`;
+              }
+
+              const errorMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                content: errorMessageContent,
+                sender: 'bot',
+                timestamp: new Date(),
+              };
+              setMessages(prev => [...prev, errorMessage]);
             }
-
-            // Bot confirms task update
-            const botMessage: Message = {
-              id: (Date.now() + 1).toString(),
-              content: `✏️ Successfully updated task: "${taskToUpdate.title}". Changes have been applied to your task.`,
-              sender: 'bot',
-              timestamp: new Date(),
-            };
-
-            setMessages(prev => [...prev, botMessage]);
           } else {
-            // Task not found
+            // Task not found - provide a list of available tasks to help user
             const botMessage: Message = {
               id: (Date.now() + 1).toString(),
-              content: `I couldn't find a task matching your description. Could you be more specific?`,
+              content: `I couldn't find a task matching "${updateInfo.title}". Available tasks: ${allTasks.slice(0, 5).map((t: any) => `"${t.title}"`).join(', ')}. Could you be more specific?`,
               sender: 'bot',
               timestamp: new Date(),
             };
@@ -474,7 +595,7 @@ const TodoChatbot = ({
         if (deletionInfo) {
           try {
             // Get all tasks to find the one to delete
-            const allTasks = await todoAPI.getAll();
+            const allTasks = await todoAPI.getAll({ skip: 0, limit: 100 });
 
             // Find the task to delete by title or other criteria
             let taskToDelete = null;
@@ -488,42 +609,84 @@ const TodoChatbot = ({
                 task.title.toLowerCase().trim() === searchTerm
               );
 
-              // If no exact match, try partial match
+              // If no exact match, try partial match with more flexible handling
               if (!taskToDelete) {
                 taskToDelete = allTasks.find((task: any) =>
-                  task.title.toLowerCase().includes(searchTerm)
+                  task.title.toLowerCase().includes(searchTerm) ||
+                  searchTerm.includes(task.title.toLowerCase())
                 );
               }
 
               // If still no match, try matching individual words with a more sophisticated approach
               if (!taskToDelete) {
-                const searchWords = searchTerm.split(/\s+/);
+                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
 
-                // Find the task with the highest word match ratio
-                let bestMatch = null;
-                let bestScore = 0;
+                // If search term is very short, be more permissive
+                if (searchWords.length === 1 && searchWords[0].length <= 3) {
+                  // For short terms, look for tasks that start with or contain the term
+                  taskToDelete = allTasks.find((task: any) =>
+                    task.title.toLowerCase().startsWith(searchWords[0]) ||
+                    task.title.toLowerCase().includes(searchWords[0])
+                  );
+                } else {
+                  // Find the task with the highest word match ratio
+                  let bestMatch = null;
+                  let bestScore = 0;
 
-                for (const task of allTasks) {
-                  const taskTitle = task.title.toLowerCase();
+                  for (const task of allTasks) {
+                    const taskTitle = task.title.toLowerCase();
+                    const taskWords = taskTitle.split(/\s+/).filter(word => word.length > 0);
 
-                  // Count exact word matches
-                  const matches = searchWords.filter(word => taskTitle.includes(word));
-                  const exactMatches = matches.length;
+                    // Count exact word matches
+                    const matches = searchWords.filter(word => taskTitle.includes(word));
+                    const exactMatches = matches.length;
 
-                  // Calculate score based on percentage of matched words
-                  const score = exactMatches > 0 ? exactMatches / searchWords.length : 0;
+                    // Count partial matches (substring matches)
+                    let partialMatches = 0;
+                    for (const searchWord of searchWords) {
+                      for (const taskWord of taskWords) {
+                        if (taskWord.includes(searchWord) || searchWord.includes(taskWord)) {
+                          partialMatches++;
+                          break; // Count each search word only once
+                        }
+                      }
+                    }
 
-                  // Also consider if the search term is contained in the task title
-                  const containsSearch = taskTitle.includes(searchTerm) ? 0.5 : 0;
-                  const combinedScore = score + containsSearch;
+                    // Calculate score based on exact matches and partial matches
+                    const exactScore = exactMatches > 0 ? exactMatches / searchWords.length : 0;
+                    const partialScore = partialMatches > 0 ? partialMatches / searchWords.length : 0;
 
-                  if (combinedScore > bestScore && combinedScore > 0.3) { // Require at least 30% match
-                    bestScore = combinedScore;
-                    bestMatch = task;
+                    // Weight exact matches higher than partial matches
+                    const combinedScore = (exactScore * 0.7) + (partialScore * 0.3);
+
+                    // Also consider if the search term is contained in the task title or vice versa
+                    const containsMatch = taskTitle.includes(searchTerm) || searchTerm.includes(taskTitle) ? 0.3 : 0;
+                    const finalScore = combinedScore + containsMatch;
+
+                    if (finalScore > bestScore && finalScore > 0.2) { // Require at least 20% match
+                      bestScore = finalScore;
+                      bestMatch = task;
+                    }
+                  }
+
+                  taskToDelete = bestMatch;
+                }
+              }
+
+              // If still no match, try a simpler approach for common cases like "Mujtaba Task01"
+              if (!taskToDelete) {
+                // Look for tasks that contain both words separately
+                const titleWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+                if (titleWords.length >= 2) {
+                  for (const task of allTasks) {
+                    const taskTitle = task.title.toLowerCase();
+                    const taskContainsAllWords = titleWords.every(word => taskTitle.includes(word));
+                    if (taskContainsAllWords) {
+                      taskToDelete = task;
+                      break;
+                    }
                   }
                 }
-
-                taskToDelete = bestMatch;
               }
             } else if (deletionInfo.taskId) {
               // Find task by ID
@@ -581,7 +744,7 @@ const TodoChatbot = ({
               // Task not found - provide a list of available tasks to help user
               const botMessage: Message = {
                 id: (Date.now() + 1).toString(),
-                content: `I couldn't find a task matching your description. Available tasks: ${allTasks.slice(0, 5).map((t: any) => `"${t.title}"`).join(', ')}. Could you be more specific?`,
+                content: `I couldn't find a task matching "${deletionInfo.title}". Available tasks: ${allTasks.slice(0, 5).map((t: any) => `"${t.title}"`).join(', ')}. Could you be more specific?`,
                 sender: 'bot',
                 timestamp: new Date(),
               };
@@ -604,7 +767,7 @@ const TodoChatbot = ({
           if (isViewTaskRequest(inputValue)) {
             // Fetch and display all tasks
             try {
-              const allTasks = await todoAPI.getAll();
+              const allTasks = await todoAPI.getAll({ skip: 0, limit: 100 });
 
               if (allTasks && allTasks.length > 0) {
                 // Create a table-like format with emojis

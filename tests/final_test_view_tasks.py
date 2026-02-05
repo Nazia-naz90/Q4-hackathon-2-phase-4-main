@@ -9,7 +9,8 @@ import os
 import sys
 
 # Add the project root and mcp-server to the Python path
-project_root = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+project_root = os.path.dirname(current_dir)  # project root directory
 mcp_server_path = os.path.join(project_root, 'mcp-server')
 
 sys.path.insert(0, project_root)

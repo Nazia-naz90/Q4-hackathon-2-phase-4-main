@@ -9,7 +9,9 @@ import sys
 # Read the system prompt directly from the file
 def read_system_prompt():
     """Read the system prompt from the file without initializing the agent."""
-    file_path = os.path.join(os.path.dirname(__file__), 'mcp-server', 'test_agent_chat.py')
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'test_agent_chat.py')
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()

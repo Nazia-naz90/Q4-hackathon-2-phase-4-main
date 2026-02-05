@@ -41,13 +41,13 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
@@ -61,7 +61,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: todo-secrets
-                  key: POSTGRES_PASSWORD
+                  key: SECRET_KEY
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

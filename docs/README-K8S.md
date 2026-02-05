@@ -84,7 +84,7 @@ kubectl apply -f k8s/secrets.yaml
 
 Run the deployment script:
 ```bash
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 Or apply the manifests manually:
@@ -243,8 +243,8 @@ All components are configured to work together in a Kubernetes environment with 
 
 ### 📁 Key Artifacts Created
 - `helm/todo-app/` - Complete Helm chart structure
-- `deploy-with-helm.sh` and `deploy-with-helm.bat` - Deployment scripts
-- `verify-deployment.sh` and `verify-deployment.bat` - Verification scripts
+- `scripts/deploy-with-helm.sh` and `scripts/deploy-with-helm.bat` - Deployment scripts
+- `scripts/verify-deployment.sh` and `scripts/verify-deployment.bat` - Verification scripts
 - `docker-compose.yml` - Local multi-container setup
 - `README-K8S-DEPLOYMENT.md` - Comprehensive deployment guide
 - `DOCKER-TESTING.md` - Docker testing procedures

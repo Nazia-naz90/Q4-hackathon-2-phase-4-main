@@ -37,8 +37,8 @@ Successfully implemented comprehensive Docker testing infrastructure for the Tod
 ✅ Environment configuration
 
 ## Usage Instructions
-1. Run `./test-docker-builds.sh` to verify individual component builds
-2. Run `./test-compose-setup.sh` to verify compose configuration
+1. Run `./scripts/test-docker-builds.sh` to verify individual component builds
+2. Run `./scripts/test-compose-setup.sh` to verify compose configuration
 3. Use `docker-compose up --build` for complete application testing
 4. Refer to `DOCKER-TESTING.md` for detailed procedures
 

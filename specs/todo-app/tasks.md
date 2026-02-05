@@ -19,7 +19,7 @@ This document outlines the implementation tasks for the Todo Application full-st
 - **Dependencies:** None
 - **Acceptance Criteria:**
   - [ ] Create `/frontend`, `/backend`, and `/specs` directories
-  - [ ] Generate root `CLAUDE.md` with project instructions
+  - [ ] Generate `docs/CLAUDE.md` with project instructions
   - [ ] Create `config.yaml` for Spec-Kit Plus
   - [ ] Initialize `.gitignore` for both frontend and backend
   - [ ] Set up basic documentation structure

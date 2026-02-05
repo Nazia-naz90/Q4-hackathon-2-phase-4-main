@@ -13,7 +13,11 @@ def verify_schema_changes():
     print("=" * 50)
 
     # Read the file to check schema
-    with open('mcp-server/test_agent_chat.py', 'r', encoding='utf-8') as f:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'test_agent_chat.py')
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Check for new schema elements
@@ -40,7 +44,11 @@ def verify_method_signature():
     print("\nVERIFYING METHOD SIGNATURE")
     print("=" * 50)
 
-    with open('mcp-server/test_agent_chat.py', 'r', encoding='utf-8') as f:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'test_agent_chat.py')
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Check for new parameter support
@@ -65,7 +73,11 @@ def verify_validation_logic():
     print("\nVERIFYING VALIDATION LOGIC")
     print("=" * 50)
 
-    with open('mcp-server/test_agent_chat.py', 'r', encoding='utf-8') as f:
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # tests directory
+    project_root = os.path.dirname(current_dir)  # project root directory
+    file_path = os.path.join(project_root, 'mcp-server', 'test_agent_chat.py')
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Check for validation of new schema

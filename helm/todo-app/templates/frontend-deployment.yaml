@@ -42,6 +42,11 @@ spec:
           env:
             - name: NEXT_PUBLIC_API_URL
               value: "http://todo-backend:{{ .Values.backend.service.port }}"
+            - name: NEXT_PUBLIC_APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: todo-app-config
+                  key: NEXT_PUBLIC_APP_URL
             # Configuration from ConfigMap
             - name: LOG_LEVEL
               valueFrom:

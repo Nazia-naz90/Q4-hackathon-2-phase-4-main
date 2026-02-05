@@ -4,7 +4,13 @@ Test script to verify that the TodoChatAgent error is fixed.
 """
 
 import asyncio
-from mcp_server.test_agent_chat import TodoChatAgent
+import sys
+import os
+# Add the project root directory to the path so imports work from the tests directory
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+from mcp-server.test_agent_chat import TodoChatAgent
 
 
 async def test_todo_chat_agent():

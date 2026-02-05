@@ -171,3 +171,4 @@ secrets:
   postgresUser: "postgres"
   postgresPassword: "mysecretpassword"
   postgresDb: "todo_db"
+  secretKey: "your-super-secret-and-long-random-string-change-this-in-production"

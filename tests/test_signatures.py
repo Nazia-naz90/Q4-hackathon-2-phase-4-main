@@ -4,7 +4,14 @@ Simple test to verify that the function signatures have been updated correctly.
 """
 
 import inspect
-from mcp_server.test_agent_chat import TodoChatAgent
+import sys
+import os
+
+# Add the project root directory to the path so imports work from the tests directory
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+from mcp-server.test_agent_chat import TodoChatAgent
 
 
 def test_function_signatures():

@@ -33,7 +33,7 @@ docker build -t todo-ai-agent:test -f ./ai-agent/Dockerfile .
 Use the provided test script to quickly verify all Dockerfiles build correctly:
 
 ```bash
-./test-docker-builds.sh
+./scripts/test-docker-builds.sh
 ```
 
 ## Complete Application Testing
