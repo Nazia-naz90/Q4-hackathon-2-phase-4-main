@@ -502,13 +502,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-For support, please open an issue in the repository or contact the development team. 🆘
+For support, please open an issue in the repository. 🆘
 
 ---
 
 <div align="center">
 
-**Made with ❤️ during Q4 Hackathon 2026** 🎉
+**Made with ❤️ during Q4 Hackathon 2  2026** 🎉
 
 *A testament to innovation, collaboration, and technical excellence through Spec-Driven Development.* 🌟
 
