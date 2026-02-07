@@ -27,16 +27,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.backend.podSecurityContext }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml .Values.backend.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}-backend
-          {{- with .Values.backend.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- toYaml .Values.backend.securityContext | nindent 12 }}
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
@@ -56,7 +52,6 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           env:
-            {{- if and .Values.secrets.postgresUser .Values.secrets.postgresPassword .Values.secrets.postgresDb .Values.database.url .Values.secrets.secretKey .Values.secrets.openaiApiKey }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -72,15 +67,6 @@ spec:
                 secretKeyRef:
                   name: todo-secrets
                   key: OPENAI_API_KEY
-            {{- else }}
-            # Placeholder values when secrets are not provided - should be overridden externally
-            - name: DATABASE_URL
-              value: "placeholder-database-url"
-            - name: SECRET_KEY
-              value: "placeholder-secret-key"
-            - name: OPENAI_API_KEY
-              value: "placeholder-openai-api-key"
-            {{- end }}
             # Configuration from ConfigMap
             - name: LOG_LEVEL
               valueFrom:

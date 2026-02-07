@@ -27,16 +27,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.frontend.podSecurityContext }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml .Values.frontend.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}-frontend
-          {{- with .Values.frontend.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- toYaml .Values.frontend.securityContext | nindent 12 }}
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:

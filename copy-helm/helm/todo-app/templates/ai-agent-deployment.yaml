@@ -27,16 +27,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.aiAgent.podSecurityContext }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml .Values.aiAgent.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}-ai-agent
-          {{- with .Values.aiAgent.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- toYaml .Values.aiAgent.securityContext | nindent 12 }}
           image: "{{ .Values.aiAgent.image.repository }}:{{ .Values.aiAgent.image.tag }}"
           imagePullPolicy: {{ .Values.aiAgent.image.pullPolicy }}
           ports:
@@ -44,7 +40,6 @@ spec:
               containerPort: 8001
               protocol: TCP
           env:
-            {{- if and .Values.secrets.postgresUser .Values.secrets.postgresPassword .Values.secrets.postgresDb .Values.database.url .Values.secrets.secretKey .Values.secrets.openaiApiKey }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -55,13 +50,6 @@ spec:
                 secretKeyRef:
                   name: todo-secrets
                   key: DATABASE_URL
-            {{- else }}
-            # Placeholder values when secrets are not provided - should be overridden externally
-            - name: OPENAI_API_KEY
-              value: "placeholder-openai-api-key"
-            - name: DATABASE_URL
-              value: "placeholder-database-url"
-            {{- end }}
             - name: BACKEND_URL
               value: "http://todo-backend:{{ .Values.backend.service.port }}"
             # Configuration from ConfigMap
