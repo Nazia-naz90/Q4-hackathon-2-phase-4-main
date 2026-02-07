@@ -26,7 +26,6 @@ COPY main.py /app/
 COPY models.py /app/
 COPY database.py /app/
 COPY admin_utils.py /app/
-COPY .env /app/  # if it exists
 
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' appuser && \
